@@ -1,0 +1,136 @@
+<!doctype html>
+<html>
+    <head>
+        <link rel="stylesheet" href="css/style.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/5.3.3/pixi.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.5.1/PixiPlugin.min.js"></script>
+        <script src="vendor/lodash.js"></script>
+        <script src="vendor/pixi.filters.js"></script>
+    </head>
+
+    <body>
+        
+    </body>
+    <script>
+
+    function decimalToHex(decColor) {
+
+        if (decColor === -1) {
+            return '#FFFFFF';
+        }
+
+        let result = Number(Math.abs(decColor)).toString(16);
+        console.log(decColor, result);
+        if (result.length === 6) {
+        return '#' + result;
+        } else if (result.length < 6) {
+        return '#' + result.padStart(6, '0');
+        }
+        return '#' + ('#' + result).substr(2, 6);
+    }
+
+    function hexToRgb(hex) {
+        // Expand shorthand form (e.g. "03F") to full form (e.g. "0033FF")
+        var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+        hex = hex.replace(shorthandRegex, function(m, r, g, b) {
+            return r + r + g + g + b + b;
+        });
+
+        var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    }
+
+
+    function generateGradientTexture(gradient, renderer, rotation, sprite) {
+
+        // rectangular gradient
+        if (Number(gradient.type) === 3) {
+
+            var colors = [];
+            var steps = [];
+            gradient.colormap
+                .forEach((colorMap, i) => {
+
+                colors.push(hexToRgb(decimalToHex(Number(colorMap.color))));
+                if (i === 0) {
+                    steps.push(0);
+                } else if (i === gradient.colormap.length - 1) {
+                    steps.push(1);
+                } else {
+                    steps.push(Number(colorMap.index) / 10000);
+                }
+                });
+            const squareGradientShader = `
+                precision highp float;
+                varying vec2 vTextureCoord;
+                uniform float centerX;
+                uniform float centerY;
+                uniform vec4 colors[##COLORS##];
+                uniform float steps[##COLORS##];
+                uniform sampler2D uSampler;
+                uniform mat3 mappedMatrix;
+                uniform vec4 inputSize;
+                uniform vec4 inputClamp;
+
+                void main() {
+                    vec3 map = vec3(vTextureCoord, 1);
+
+                    vec2 xyDist = abs(vTextureCoord - vec2(centerX, centerY));
+                    float dist = max(xyDist.x, xyDist.y);
+                    highp vec4 col = colors[0];
+                    for (int i = 1; i < ##COLORS##; ++i) {
+                        col = mix(col, colors[i], smoothstep(steps[i - 1], steps[i], dist));
+                    }
+                    vec4 finalColor = vec4(col.r, col.g, col.b, 1);
+
+                    gl_FragColor = finalColor;
+                }
+            `.replace(/##COLORS##/g, colors.length);
+            const filter = new PIXI.Filter(null, squareGradientShader, {
+                centerX: Number(gradient.p0x) / 10000,
+                centerY: Number(gradient.p0y) / 10000,
+                colors: _.flatten(colors.map((c) => [Math.round(Number((c.r / 255))), Math.round(Number(c.g / 255)), Math.round(Number((c.b / 255))), 1])),
+                steps: steps,
+                rotation: rotation
+            });
+            return filter;
+        }
+
+        return null;
+    }
+
+        const app = new PIXI.Application();
+
+        var renderer = PIXI.autoDetectRenderer(720, 480, {antialias: true, transparent: false});
+
+        document.body.appendChild(app.renderer.view);
+
+        /* Create a container object called the `stage` */
+        stage = new PIXI.Container();
+        app.stage.addChild(stage);
+
+        const sprite = new PIXI.Sprite.from('https://static4.depositphotos.com/1006994/298/v/450/depositphotos_2983099-stock-illustration-grunge-design.jpg');
+        sprite.anchor.set(0.5);
+        sprite.x = renderer.width/2;
+        sprite.y = renderer.height/2;
+        sprite.rotation = Math.PI/6;
+
+        sprite.filters = [generateGradientTexture({
+            type: 3,
+            p0x: 5000,
+            p0y: 5000,
+            colormap: [
+                { color: -1 },
+                { color: -1, index: 2921 },
+                { color: -16777216, index: 3542 },
+                { color: -16777216, index: 10000 }
+            ]
+        }, renderer, [1, 0], sprite)];
+
+        stage.addChild(sprite);
+    </script>
+</html>
